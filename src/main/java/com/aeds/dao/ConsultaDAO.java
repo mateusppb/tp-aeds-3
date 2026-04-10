@@ -3,13 +3,14 @@ package com.aeds.dao;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
+import com.aeds.model.Consulta;
 import com.aeds.model.Paciente;
 
-public class PacienteDAO {
+public class ConsultaDAO {
     private RandomAccessFile raf;
-    private String arquivo = "pacientes.dat";
+    private String arquivo = "consultas.dat";
 
-    public PacienteDAO() throws IOException {
+    public ConsultaDAO() throws IOException {
         raf = new RandomAccessFile(arquivo, "rw");
 
         if (raf.length() == 0){
@@ -33,21 +34,21 @@ public class PacienteDAO {
 
 //------------------------------------------------------------
 
-    public int create(Paciente p) throws IOException {
-        int id = getUltimoId() + 1;
-
-        setUltimoId(id);
-        p.setId(id);
+    public int create(Consulta con) throws IOException {
         
+        int id = getUltimoId() + 1;
+        setUltimoId(id);
+        con.setId(id);
+
         raf.seek(raf.length());
-        p.escreverArquivo(raf);
+        con.escreverArquivo(raf);
 
         return id;
     }
 
-    public Paciente read(int idProcurado) throws IOException {
+    public Consulta read(int idProcurado) throws IOException {
         raf.seek(4);
-        
+
         while (raf.getFilePointer() < raf.length()) {
             byte lapide = raf.readByte();
             int tamRegistro = raf.readInt();
@@ -57,19 +58,18 @@ public class PacienteDAO {
             if(lapide == 0){
                 int id = raf.readInt();
                 if(idProcurado == id) {
-                    Paciente p = new Paciente();
-                    p.lerArquivo(raf, posRegistro);
+                    Consulta con = new Consulta();
+                    con.lerArquivo(raf, posRegistro);
 
-                    return p;
+                    return con;
                 }
             }
             raf.seek(posRegistro + tamRegistro);
         }
-
         return null;
     }
 
-    public boolean update(Paciente p) throws IOException {
+    public boolean update(Consulta con) throws IOException {
         raf.seek(4);
 
         while (raf.getFilePointer() < raf.length()) {
@@ -83,20 +83,20 @@ public class PacienteDAO {
             if(lapide == 0) {
                 int id = raf.readInt();
                 
-                if(p.getId() == id){
+                if(con.getId() == id){
                     Paciente pAtual = new Paciente();
                     pAtual.lerArquivo(raf, posDados);
                     
-                    if(tamRegistro >= p.verificarTamanho()) {
+                    if(tamRegistro >= con.verificarTamanho()) {
                         raf.seek(posDados);
-                        p.escreverDados(raf);
+                        con.escreverDados(raf);
 
                     } else {
                         raf.seek(posLapide);
                         raf.writeByte(1);
 
                         raf.seek(raf.length());
-                        p.escreverArquivo(raf);
+                        con.escreverArquivo(raf);
                     }
 
                     return true;
@@ -133,4 +133,5 @@ public class PacienteDAO {
 
         return false;
     }
+
 }

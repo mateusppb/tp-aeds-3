@@ -125,6 +125,7 @@ public class Paciente {
     }
 
     public int verificarTamanho() {
+
         int tamanho = 0;
 
         tamanho += 4; //id
