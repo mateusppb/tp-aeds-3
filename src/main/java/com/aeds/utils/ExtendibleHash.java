@@ -21,35 +21,47 @@ class KeyNotFoundException extends Exception {
 
 class Bucket {
     int profloc;
-    List<Integer> valores;
     int capacidade;
+    List<Long> posicoes;
+    List<Integer> chaves;
 
     public Bucket(int profundidade, int capacidade) {
         this.profloc = profundidade;
         this.capacidade = capacidade;
-        this.valores = new ArrayList<>();
+        this.chaves = new ArrayList<>();
+        this.posicoes = new ArrayList<>();
     }
 
     public boolean isFull() {
-        return valores.size() >= capacidade;
+        return chaves.size() >= capacidade;
     }
 
-    public boolean contains(int key) {
-        return valores.contains(key);
+    public int indexOf(int key) {
+        return chaves.indexOf(key);
     }
 
-    public void insert(int key) {
-        valores.add(key);
+    public long getPos(int key) {
+        int i = indexOf(key);
+        return (i != -1) ? posicoes.get(i) : -1;
+    }
+
+    public void insert(int key, long pos) {
+        chaves.add(key);
+        posicoes.add(pos);
     }
 
     public void remove(int key) {
-        valores.remove((Integer) key);
+        int i = indexOf(key);
+        if (i != -1) {
+            chaves.remove(i);
+            posicoes.remove(i);
+        }
     }
 }
 
 // ================= HASH DINAMICA =================
 
-class ExtendibleHash {
+public class ExtendibleHash {
     int profglob;
     int bucketSize;
     List<Bucket> directory;
@@ -75,28 +87,30 @@ class ExtendibleHash {
     }
 
     // ================= INSERT =================
-    public void insert(int key) throws DuplicateKeyException {
+    public void insert(int key, long pos) throws DuplicateKeyException {
         int index = getIndex(key);
         Bucket bucket = directory.get(index);
 
-        if (bucket.contains(key)) {
+        if (bucket.indexOf(key) != -1) {
             throw new DuplicateKeyException(key);
         }
         if (!bucket.isFull()) {
-            bucket.insert(key);
+            bucket.insert(key, pos);
         } else {
             splitBucket(index);
-            insert(key);
+            insert(key, pos);
         }
     }
 
     // ================= PROCURA =================
-    public int search(int key) throws KeyNotFoundException {
+    public long search(int key) throws KeyNotFoundException {
         int index = getIndex(key);
         Bucket bucket = directory.get(index);
 
-        if (bucket.contains(key)) {
-            return key;
+        long pos = bucket.getPos(key);
+
+        if (pos != -1) {
+            return pos;
         }
 
         throw new KeyNotFoundException(key);
@@ -107,7 +121,7 @@ class ExtendibleHash {
         int index = getIndex(key);
         Bucket bucket = directory.get(index);
 
-        if (!bucket.contains(key)) {
+        if (bucket.indexOf(key) == -1) {
             throw new KeyNotFoundException(key);
         }
 
@@ -126,8 +140,10 @@ class ExtendibleHash {
         Bucket newBucket = new Bucket(oldprofundidade + 1, bucketSize);
         oldBucket.profloc++;
 
-        List<Integer> temp = new ArrayList<>(oldBucket.valores);
-        oldBucket.valores.clear();
+        List<Integer> tempKeys = new ArrayList<>(oldBucket.chaves);
+        List<Long> tempPos = new ArrayList<>(oldBucket.posicoes);
+        oldBucket.chaves.clear();
+        oldBucket.posicoes.clear();
 
         for (int i = 0; i < directory.size(); i++) {
             if (directory.get(i) == oldBucket) {
@@ -137,9 +153,9 @@ class ExtendibleHash {
             }
         }
 
-        for (int val : temp) {
+        for (int i = 0; i < tempKeys.size(); i++) {
             try {
-                insert(val);
+                insert(tempKeys.get(i), tempPos.get(i));
             } catch (DuplicateKeyException e) {
                 System.out.println(e.getMessage());
             }
@@ -162,7 +178,7 @@ class ExtendibleHash {
             Bucket b = directory.get(i);
             System.out.println(
                 "Index " + i +
-                " -> " + b.valores +
+                " -> " + b.chaves +
                 " (profloc=" + b.profloc + ")"
             );
         }
@@ -171,21 +187,21 @@ class ExtendibleHash {
 
 // ================= MAIN =================
 
-public class hashextensivo {
+class hashextensivo {
     public static void main(String[] args) {
         ExtendibleHash hash = new ExtendibleHash(2);
 
         try {
-            hash.insert(10);
-            hash.insert(20);
-            hash.insert(30);
-            hash.insert(40);
-            hash.insert(50);
+            hash.insert(10, 100);
+            hash.insert(20, 200);
+            hash.insert(30, 300);
+            hash.insert(40, 400);
+            hash.insert(50, 500);
 
             hash.display();
 
             // TESTE DUPLICADO
-            hash.insert(10);
+            hash.insert(10, 100);
 
         } catch (DuplicateKeyException e) {
             System.out.println("[ERRO INSERT] " + e.getMessage());
