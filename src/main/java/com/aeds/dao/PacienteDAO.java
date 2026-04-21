@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 
 import com.aeds.model.Paciente;
+import com.aeds.utils.ExtendibleHash;
 
 public class PacienteDAO {
     private RandomAccessFile raf;
     private String arquivo = "pacientes.dat";
+    private ExtendibleHash indicePK;
 
     public PacienteDAO() throws IOException {
         raf = new RandomAccessFile(arquivo, "rw");
@@ -15,6 +17,8 @@ public class PacienteDAO {
         if (raf.length() == 0){
             raf.writeInt(0);
         }
+        indicePK = new ExtendibleHash(2, true);
+        rebuildIndex();
     }
 
     public void close() throws IOException {
@@ -31,6 +35,26 @@ public class PacienteDAO {
         raf.writeInt(id);
     }
 
+    private void rebuildIndex() throws IOException {
+        raf.seek(4);
+
+        while (raf.getFilePointer() < raf.length()) {
+            long pos = raf.getFilePointer();
+
+            byte lapide = raf.readByte();
+            int tam = raf.readInt();
+
+            if (lapide == 0) {
+                int id = raf.readInt();
+                try {
+                    indicePK.insert(id, pos);
+                } catch (Exception e) {}
+            }
+
+            raf.seek(pos + 1 + 4 + tam);
+        }
+    }
+
 //------------------------------------------------------------
 
     public int create(Paciente p) throws IOException {
@@ -39,98 +63,80 @@ public class PacienteDAO {
         setUltimoId(id);
         p.setId(id);
         
-        raf.seek(raf.length());
+        long pos = raf.length();
+        raf.seek(pos);
         p.escreverArquivo(raf);
+
+        try {
+            indicePK.insert(id, pos);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         return id;
     }
 
     public Paciente read(int idProcurado) throws IOException {
-        raf.seek(4);
-        
-        while (raf.getFilePointer() < raf.length()) {
-            byte lapide = raf.readByte();
-            int tamRegistro = raf.readInt();
+        try {
+            long pos = indicePK.search(idProcurado).get(0);
 
-            long posRegistro = raf.getFilePointer();
+            raf.seek(pos + 1 + 4);
+            Paciente p = new Paciente();
+            p.lerArquivo(raf, raf.getFilePointer());
+            return p;
 
-            if(lapide == 0){
-                int id = raf.readInt();
-                if(idProcurado == id) {
-                    Paciente p = new Paciente();
-                    p.lerArquivo(raf, posRegistro);
-
-                    return p;
-                }
-            }
-            raf.seek(posRegistro + tamRegistro);
+        } catch (Exception e) {
+            System.out.println("ID não encontrado.");
+            return null;
         }
-
-        return null;
     }
 
     public boolean update(Paciente p) throws IOException {
-        raf.seek(4);
+        try {
+            long pos = indicePK.search(p.getId()).get(0);
 
-        while (raf.getFilePointer() < raf.length()) {
-            long posLapide = raf.getFilePointer();
-            
+            raf.seek(pos);
             byte lapide = raf.readByte();
             int tamRegistro = raf.readInt();
-
             long posDados = raf.getFilePointer();
 
-            if(lapide == 0) {
-                int id = raf.readInt();
-                
-                if(p.getId() == id){
-                    Paciente pAtual = new Paciente();
-                    pAtual.lerArquivo(raf, posDados);
-                    
-                    if(tamRegistro >= p.verificarTamanho()) {
-                        raf.seek(posDados);
-                        p.escreverDados(raf);
+            if (lapide != 0) return false;
 
-                    } else {
-                        raf.seek(posLapide);
-                        raf.writeByte(1);
+            if (tamRegistro >= p.verificarTamanho()) {
+                raf.seek(posDados);
+                p.escreverDados(raf);
 
-                        raf.seek(raf.length());
-                        p.escreverArquivo(raf);
-                    }
+            } else {
+                raf.seek(pos);
+                raf.writeByte(1);
 
-                    return true;
-                }
+                long novaPos = raf.length();
+                raf.seek(novaPos);
+                p.escreverArquivo(raf);
+
+                indicePK.delete(p.getId(), pos);
+                indicePK.insert(p.getId(), novaPos);
             }
 
-            raf.seek(posDados + tamRegistro);
+            return true;
+
+        } catch (Exception e) {
+            return false;
         }
-        
-        return false;
     }
 
     public boolean delete(int idProcurado) throws IOException {
-        raf.seek(4);
+        try {
+            long pos = indicePK.search(idProcurado).get(0);
 
-        while(raf.getFilePointer() < raf.length()) {
-            long posRegistro = raf.getFilePointer();
+            raf.seek(pos);
+            raf.writeByte(1);
 
-            byte lapide = raf.readByte();
-            int tamRegistro = raf.readInt();
+            indicePK.delete(idProcurado, pos);
+            return true;
 
-
-            if(lapide == 0) {
-                int id = raf.readInt();
-
-                if(idProcurado == id) {
-                    raf.seek(posRegistro);
-                    raf.writeByte(1);
-                    return true;
-                }
-            }
-            raf.seek(posRegistro + 1 + 4 + tamRegistro);
+        } catch (Exception e) {
+            return false;
         }
-
-        return false;
     }
 }

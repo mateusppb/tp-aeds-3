@@ -18,7 +18,8 @@ public class OrdenacaoExterna {
         List<String> arquivosTemporarios = new ArrayList<>();
 
         RandomAccessFile raf = new RandomAccessFile(arquivoEntrada, "r");
-
+        raf.seek(4);
+        
         while (raf.getFilePointer() < raf.length()) {
 
             List<Consulta> bloco = new ArrayList<>();

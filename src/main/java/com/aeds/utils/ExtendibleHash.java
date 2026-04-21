@@ -22,7 +22,7 @@ class KeyNotFoundException extends Exception {
 class Bucket {
     int profloc;
     int capacidade;
-    List<Long> posicoes;
+    List<List<Long>> posicoes;
     List<Integer> chaves;
 
     public Bucket(int profundidade, int capacidade) {
@@ -40,14 +40,22 @@ class Bucket {
         return chaves.indexOf(key);
     }
 
-    public long getPos(int key) {
+    public List<Long> getPos(int key) {
         int i = indexOf(key);
-        return (i != -1) ? posicoes.get(i) : -1;
+        return (i != -1) ? posicoes.get(i) : null;
     }
 
-    public void insert(int key, long pos) {
-        chaves.add(key);
-        posicoes.add(pos);
+    public void insert(int key, long pos, boolean permitiDuplicata) throws DuplicateKeyException {
+        int i = indexOf(key);
+        if (i != -1) {
+            if (!permitiDuplicata) throw new DuplicateKeyException(key);
+            posicoes.get(i).add(pos);
+        } else {
+            chaves.add(key);
+            List<Long> novaLista = new ArrayList<>();
+            novaLista.add(pos);
+            posicoes.add(novaLista);
+        }
     }
 
     public void remove(int key) {
@@ -65,10 +73,12 @@ public class ExtendibleHash {
     int profglob;
     int bucketSize;
     List<Bucket> directory;
+    boolean modoPK; //define se é comportamento de PK ou 1-N
 
-    public ExtendibleHash(int bucketSize) {
+    public ExtendibleHash(int bucketSize, boolean modoPK) {
         this.profglob = 1;
         this.bucketSize = bucketSize;
+        this.modoPK = modoPK;
         this.directory = new ArrayList<>();
 
         // cria 2 buckets iniciais
@@ -91,11 +101,11 @@ public class ExtendibleHash {
         int index = getIndex(key);
         Bucket bucket = directory.get(index);
 
-        if (bucket.indexOf(key) != -1) {
+        if (modoPK && bucket.indexOf(key) != -1) {
             throw new DuplicateKeyException(key);
         }
         if (!bucket.isFull()) {
-            bucket.insert(key, pos);
+            bucket.insert(key, pos, !modoPK);
         } else {
             splitBucket(index);
             insert(key, pos);
@@ -103,29 +113,33 @@ public class ExtendibleHash {
     }
 
     // ================= PROCURA =================
-    public long search(int key) throws KeyNotFoundException {
+    public List<Long> search(int key) throws KeyNotFoundException {
         int index = getIndex(key);
         Bucket bucket = directory.get(index);
+        List<Long> lista = bucket.getPos(key);
 
-        long pos = bucket.getPos(key);
-
-        if (pos != -1) {
-            return pos;
-        }
-
+        if (lista != null) return lista;
         throw new KeyNotFoundException(key);
     }
 
     // ================= DELETA =================
-    public void delete(int key) throws KeyNotFoundException {
+    public void delete(int key, long pos) throws KeyNotFoundException {
         int index = getIndex(key);
         Bucket bucket = directory.get(index);
 
-        if (bucket.indexOf(key) == -1) {
+        int i = bucket.indexOf(key);
+
+        if (i == -1) {
             throw new KeyNotFoundException(key);
         }
 
-        bucket.remove(key);
+        List<Long> lista = bucket.posicoes.get(i);
+
+        lista.remove(pos);
+
+        if (lista.isEmpty()) {
+            bucket.remove(key);
+        }
     }
 
     // ================= SPLIT =================
@@ -141,7 +155,7 @@ public class ExtendibleHash {
         oldBucket.profloc++;
 
         List<Integer> tempKeys = new ArrayList<>(oldBucket.chaves);
-        List<Long> tempPos = new ArrayList<>(oldBucket.posicoes);
+        List<List<Long>> tempPos = new ArrayList<>(oldBucket.posicoes);
         oldBucket.chaves.clear();
         oldBucket.posicoes.clear();
 
@@ -154,10 +168,10 @@ public class ExtendibleHash {
         }
 
         for (int i = 0; i < tempKeys.size(); i++) {
-            try {
-                insert(tempKeys.get(i), tempPos.get(i));
-            } catch (DuplicateKeyException e) {
-                System.out.println(e.getMessage());
+            for (long p : tempPos.get(i)) {
+                try { 
+                    this.insert(tempKeys.get(i), p); 
+                } catch (DuplicateKeyException e) {}
             }
         }
     }

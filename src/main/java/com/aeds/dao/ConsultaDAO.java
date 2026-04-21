@@ -5,11 +5,13 @@ import java.io.RandomAccessFile;
 
 import com.aeds.model.Consulta;
 import com.aeds.utils.ExtendibleHash;
+import com.aeds.utils.OrdenacaoExterna;
 
 public class ConsultaDAO {
     private RandomAccessFile raf;
     private String arquivo = "consultas.dat";
-    private ExtendibleHash indice;
+    private ExtendibleHash indicePK; // Primary Key
+    private ExtendibleHash indicePaciente; // 1:N
 
     public ConsultaDAO() throws IOException {
         raf = new RandomAccessFile(arquivo, "rw");
@@ -18,7 +20,8 @@ public class ConsultaDAO {
             raf.writeInt(0);
         }
 
-        indice = new ExtendibleHash(2);
+        indicePK = new ExtendibleHash(2, true);
+        indicePaciente = new ExtendibleHash(2, false);
         rebuildIndex();
     }
 
@@ -47,9 +50,14 @@ public class ConsultaDAO {
 
             if (lapide == 0) {
                 int id = raf.readInt();
+                double valor = raf.readDouble();
+                String obs = raf.readUTF();
+                long data = raf.readLong();
+                int idPaciente = raf.readInt();
 
                 try {
-                    indice.insert(id, pos);
+                    indicePK.insert(id, pos);
+                    indicePaciente.insert(idPaciente, pos);
                 } catch (Exception e) {}
             }
 
@@ -70,8 +78,10 @@ public class ConsultaDAO {
         raf.seek(pos);
         con.escreverArquivo(raf);
 
+        
         try {
-            indice.insert(con.getId(), pos);
+            indicePK.insert(con.getId(), pos);
+            indicePaciente.insert(con.getIdPaciente(), pos);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -80,7 +90,7 @@ public class ConsultaDAO {
 
     public Consulta read(int idProcurado) throws IOException {
         try {
-            long pos = indice.search(idProcurado);
+            long pos = indicePK.search(idProcurado).get(0);
 
             raf.seek(pos + 1 + 4); // pula lápide +tamanho
 
@@ -97,7 +107,7 @@ public class ConsultaDAO {
 
     public boolean update(Consulta con) throws IOException {
         try {
-                long pos = indice.search(con.getId());
+                long pos = indicePK.search(con.getId()).get(0);
 
                 raf.seek(pos);
 
@@ -106,6 +116,9 @@ public class ConsultaDAO {
 
                 long posDados = raf.getFilePointer();
                 if (lapide != 0) return false;
+
+                Consulta antiga = new Consulta();
+                antiga.lerArquivo(raf, posDados);
 
                 if (tamRegistro >= con.verificarTamanho()) {
 
@@ -120,8 +133,11 @@ public class ConsultaDAO {
                                 raf.seek(novaPos);
                                 con.escreverArquivo(raf);
 
-                                indice.delete(con.getId());
-                                indice.insert(con.getId(), novaPos);
+                                indicePK.delete(con.getId(), pos);
+                                indicePK.insert(con.getId(), novaPos);
+
+                                indicePaciente.delete(antiga.getIdPaciente(), pos);
+                                indicePaciente.insert(con.getIdPaciente(), novaPos);
                             }
 
                             return true;
@@ -132,17 +148,63 @@ public class ConsultaDAO {
 
     public boolean delete(int idProcurado) throws IOException {
         try {
-            long pos = indice.search(idProcurado);
+            long pos = indicePK.search(idProcurado).get(0);
+
+            raf.seek(pos);
+
+            byte lapide = raf.readByte();
+            int tam = raf.readInt();
+            long posDados = raf.getFilePointer();
+
+            Consulta c = new Consulta();
+            c.lerArquivo(raf, posDados);
 
             raf.seek(pos);
             raf.writeByte(1);
 
-            indice.delete(idProcurado);
+            indicePK.delete(idProcurado, pos);
+            indicePaciente.delete(c.getIdPaciente(), pos);
+
             return true;
 
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public void ordenarPorData() {
+        try {
+            OrdenacaoExterna.ordenarExternoPorData(
+                "consultas.dat",
+                "consultas_ordenado.dat",
+                5 // tamanho do bloco (pode ajustar)
+            );
+            System.out.println("Arquivo ordenado gerado com sucesso!");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void listarOrdenado() throws IOException {
+        RandomAccessFile raf = new RandomAccessFile("consultas_ordenado.dat", "r");
+
+        while (raf.getFilePointer() < raf.length()) {
+
+            byte lapide = raf.readByte();
+            int tamanho = raf.readInt();
+
+            long pos = raf.getFilePointer();
+
+            if (lapide == 0) {
+                Consulta c = new Consulta();
+                c.lerArquivo(raf, pos);
+                System.out.println(c);
+            }
+
+            raf.seek(pos + tamanho);
+        }
+
+        raf.close();
     }
 
 }
