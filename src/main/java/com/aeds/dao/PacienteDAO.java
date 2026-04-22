@@ -1,5 +1,6 @@
 package com.aeds.dao;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
@@ -14,11 +15,18 @@ public class PacienteDAO {
     public PacienteDAO() throws IOException {
         raf = new RandomAccessFile(arquivo, "rw");
 
-        if (raf.length() == 0){
+        if (raf.length() == 0) {
             raf.writeInt(0);
         }
+
         indicePK = new ExtendibleHash(2, true);
-        rebuildIndex();
+
+        File arquivoIdx = new File("pacientes.idx");
+        if (arquivoIdx.exists()) {
+            indicePK.carregarDoDisco("pacientes.idx");
+        } else {
+            rebuildIndex();
+        }
     }
 
     public void close() throws IOException {
@@ -40,7 +48,6 @@ public class PacienteDAO {
 
         while (raf.getFilePointer() < raf.length()) {
             long pos = raf.getFilePointer();
-
             byte lapide = raf.readByte();
             int tam = raf.readInt();
 
@@ -53,6 +60,8 @@ public class PacienteDAO {
 
             raf.seek(pos + 1 + 4 + tam);
         }
+
+        indicePK.salvarEmDisco("pacientes.idx");
     }
 
 //------------------------------------------------------------

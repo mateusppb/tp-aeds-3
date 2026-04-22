@@ -1,5 +1,7 @@
 package com.aeds.utils;
 
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -197,48 +199,78 @@ public class ExtendibleHash {
             );
         }
     }
-}
+    // ========== PERSISTÊNCIA EM DISCO =================
+    public void salvarEmDisco(String caminhoIdx) throws IOException {
+        RandomAccessFile idx = new RandomAccessFile(caminhoIdx, "rw");
+        idx.setLength(0); // limpa o arquivo
 
-// ================= MAIN =================
+        idx.writeInt(profglob);
 
-class hashextensivo {
-    public static void main(String[] args) {
-        ExtendibleHash hash = new ExtendibleHash(2);
-
-        try {
-            hash.insert(10, 100);
-            hash.insert(20, 200);
-            hash.insert(30, 300);
-            hash.insert(40, 400);
-            hash.insert(50, 500);
-
-            hash.display();
-
-            // TESTE DUPLICADO
-            hash.insert(10, 100);
-
-        } catch (DuplicateKeyException e) {
-            System.out.println("[ERRO INSERT] " + e.getMessage());
+        List<Bucket> bucketUnicos = new ArrayList<>();
+        for (Bucket b : directory) {
+            if (!bucketUnicos.contains(b)) bucketUnicos.add(b);
         }
 
-        try {
-            System.out.println("\nBusca: " + hash.search(30));
-
-            // ERRO: não existe
-            hash.search(999);
-
-        } catch (KeyNotFoundException e) {
-            System.out.println("[ERRO SEARCH] " + e.getMessage());
+        idx.writeInt(directory.size());
+        for (Bucket b : directory) {
+            idx.writeInt(bucketUnicos.indexOf(b));
         }
 
-        try {
-            hash.delete(20);
-            hash.delete(999); // erro
-
-        } catch (KeyNotFoundException e) {
-            System.out.println("[ERRO DELETE] " + e.getMessage());
+        idx.writeInt(bucketUnicos.size());
+        for (Bucket b : bucketUnicos) {
+            idx.writeInt(b.profloc);
+            idx.writeInt(b.chaves.size());
+            for (int i = 0; i < b.chaves.size(); i++) {
+                idx.writeInt(b.chaves.get(i));
+                idx.writeInt(b.posicoes.get(i).size());
+                for (long pos : b.posicoes.get(i)) {
+                    idx.writeLong(pos);
+                }
+            }
         }
 
-        hash.display();
+        idx.close();
+    }
+
+    public void carregarDoDisco(String caminhoIdx) throws IOException {
+        RandomAccessFile idx = new RandomAccessFile(caminhoIdx, "r");
+
+        profglob = idx.readInt();
+
+        int tamDir = idx.readInt();
+
+        int[] mapeamento = new int[tamDir];
+        for (int i = 0; i < tamDir; i++) {
+            mapeamento[i] = idx.readInt();
+        }
+
+        int qtdBuckets = idx.readInt();
+        List<Bucket> bucketUnicos = new ArrayList<>();
+
+        for (int i = 0; i < qtdBuckets; i++) {
+            int profloc = idx.readInt();
+            Bucket b = new Bucket(profloc, bucketSize);
+
+            int qtdChaves = idx.readInt();
+            for (int j = 0; j < qtdChaves; j++) {
+                int chave = idx.readInt();
+                int qtdPos = idx.readInt();
+                for (int k = 0; k < qtdPos; k++) {
+                    long pos = idx.readLong();
+                    try {
+                        b.insert(chave, pos, !modoPK);
+                    } catch (DuplicateKeyException e) {}
+                }
+            }
+
+            bucketUnicos.add(b);
+        }
+
+        directory.clear();
+        for (int i = 0; i < tamDir; i++) {
+            directory.add(bucketUnicos.get(mapeamento[i]));
+        }
+
+        idx.close();
     }
 }

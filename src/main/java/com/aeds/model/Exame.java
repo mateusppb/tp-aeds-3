@@ -62,4 +62,9 @@ public class Exame {
 
         return tamanho;
     }
+
+    @Override
+    public String toString() {
+        return "Exame{id=" + id + ", nome='" + nome + "', descricao='" + descricao + "'}";
+    }
 }

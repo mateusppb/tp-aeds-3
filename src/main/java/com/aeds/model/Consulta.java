@@ -107,4 +107,8 @@ public class Consulta {
         return tamanho;
     }
 
+    @Override
+    public String toString() {
+        return "Consulta{id=" + id + ", valor=" + valor + ", observacao='" + observacao + "', data=" + data + ", idPaciente=" + idPaciente + "}";
+    }
 }

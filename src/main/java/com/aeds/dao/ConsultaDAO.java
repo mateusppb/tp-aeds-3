@@ -2,6 +2,8 @@ package com.aeds.dao;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.aeds.model.Consulta;
 import com.aeds.utils.ExtendibleHash;
@@ -205,6 +207,22 @@ public class ConsultaDAO {
         }
 
         raf.close();
+    }
+
+    public List<Consulta> readByPaciente(int idPaciente) throws IOException {
+        List<Consulta> resultado = new ArrayList<>();
+        try {
+            List<Long> posicoes = indicePaciente.search(idPaciente);
+            for (long pos : posicoes) {
+                raf.seek(pos + 1 + 4); // pula lápide +tamanho
+                Consulta con = new Consulta();
+                con.lerArquivo(raf, raf.getFilePointer());
+                resultado.add(con);
+            }
+        } catch (Exception e) {
+            System.out.println("Nenhuma consulta encontrada para o paciente " + idPaciente);
+        }
+        return resultado;
     }
 
 }
