@@ -202,7 +202,7 @@ public class ExtendibleHash {
     // ========== PERSISTÊNCIA EM DISCO =================
     public void salvarEmDisco(String caminhoIdx) throws IOException {
         RandomAccessFile idx = new RandomAccessFile(caminhoIdx, "rw");
-        idx.setLength(0); // limpa o arquivo
+        idx.setLength(0); // limpa arq
 
         idx.writeInt(profglob);
 

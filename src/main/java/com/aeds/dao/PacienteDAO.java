@@ -3,6 +3,7 @@ package com.aeds.dao;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.List;
 
 import com.aeds.model.Paciente;
 import com.aeds.utils.ExtendibleHash;
@@ -78,6 +79,7 @@ public class PacienteDAO {
 
         try {
             indicePK.insert(id, pos);
+            indicePK.salvarEmDisco("pacientes.idx");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -87,15 +89,29 @@ public class PacienteDAO {
 
     public Paciente read(int idProcurado) throws IOException {
         try {
-            long pos = indicePK.search(idProcurado).get(0);
+            List<Long> posicoes = indicePK.search(idProcurado);
 
-            raf.seek(pos + 1 + 4);
+            if (posicoes == null || posicoes.isEmpty()) {
+                return null;
+            }
+
+            long pos = posicoes.get(0);
+
+            raf.seek(pos);
+
+            byte lapide = raf.readByte();
+            int tamanho = raf.readInt();
+
+            if (lapide != 0) {
+                return null;
+            }
+
             Paciente p = new Paciente();
             p.lerArquivo(raf, raf.getFilePointer());
+
             return p;
 
         } catch (Exception e) {
-            System.out.println("ID não encontrado.");
             return null;
         }
     }
@@ -112,6 +128,7 @@ public class PacienteDAO {
             if (lapide != 0) return false;
 
             if (tamRegistro >= p.verificarTamanho()) {
+
                 raf.seek(posDados);
                 p.escreverDados(raf);
 
@@ -126,6 +143,8 @@ public class PacienteDAO {
                 indicePK.delete(p.getId(), pos);
                 indicePK.insert(p.getId(), novaPos);
             }
+
+            indicePK.salvarEmDisco("pacientes.idx");
 
             return true;
 
@@ -142,6 +161,9 @@ public class PacienteDAO {
             raf.writeByte(1);
 
             indicePK.delete(idProcurado, pos);
+
+            indicePK.salvarEmDisco("pacientes.idx");
+
             return true;
 
         } catch (Exception e) {

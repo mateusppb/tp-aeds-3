@@ -1,7 +1,9 @@
 package com.aeds.dao;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.List;
 
 import com.aeds.model.Exame;
 import com.aeds.utils.ExtendibleHash;
@@ -13,14 +15,21 @@ public class ExameDAO {
     private ExtendibleHash indicePK;
 
     public ExameDAO() throws IOException {
-        raf = new RandomAccessFile(arquivo, "rw");
+        raf = new RandomAccessFile("exames.dat", "rw");
 
         if (raf.length() == 0) {
             raf.writeInt(0);
         }
 
         indicePK = new ExtendibleHash(2, true);
-        rebuildIndex();
+
+        File arquivoIdx = new File("exames.idx");
+
+        if (arquivoIdx.exists()) {
+            indicePK.carregarDoDisco("exames.idx");
+        } else {
+            rebuildIndex();
+        }
     }
 
     private int getUltimoId() throws IOException {
@@ -51,6 +60,8 @@ public class ExameDAO {
 
             raf.seek(pos + 1 + 4 + tam);
         }
+
+        indicePK.salvarEmDisco("exames.idx");
     }
 
     public int create(Exame e) throws IOException {
@@ -65,6 +76,7 @@ public class ExameDAO {
 
         try {
             indicePK.insert(id, pos);
+            indicePK.salvarEmDisco("exames.idx");
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -74,15 +86,29 @@ public class ExameDAO {
 
     public Exame read(int idProcurado) throws IOException {
         try {
-            long pos = indicePK.search(idProcurado).get(0);
+            List<Long> posicoes = indicePK.search(idProcurado);
 
-            raf.seek(pos + 1 + 4);
+            if (posicoes == null || posicoes.isEmpty()) {
+                return null;
+            }
+
+            long pos = posicoes.get(0);
+
+            raf.seek(pos);
+
+            byte lapide = raf.readByte();
+            int tamanho = raf.readInt();
+
+            if (lapide != 0) {
+                return null;
+            }
+
             Exame e = new Exame();
             e.lerArquivo(raf, raf.getFilePointer());
+
             return e;
 
-        } catch (Exception e) {
-            System.out.println("ID não encontrado.");
+        } catch (Exception ex) {
             return null;
         }
     }
@@ -92,13 +118,15 @@ public class ExameDAO {
             long pos = indicePK.search(e.getId()).get(0);
 
             raf.seek(pos);
+
             byte lapide = raf.readByte();
-            int tamanhoRegistro = raf.readInt();
+            int tamRegistro = raf.readInt();
             long posDados = raf.getFilePointer();
 
             if (lapide != 0) return false;
 
-            if (tamanhoRegistro >= e.verificarTamanho()) {
+            if (tamRegistro >= e.verificarTamanho()) {
+
                 raf.seek(posDados);
                 e.escreverDados(raf);
 
@@ -113,6 +141,8 @@ public class ExameDAO {
                 indicePK.delete(e.getId(), pos);
                 indicePK.insert(e.getId(), novaPos);
             }
+
+            indicePK.salvarEmDisco("exames.idx");
 
             return true;
 
@@ -129,6 +159,9 @@ public class ExameDAO {
             raf.writeByte(1);
 
             indicePK.delete(idProcurado, pos);
+
+            indicePK.salvarEmDisco("exames.idx");
+
             return true;
 
         } catch (Exception e) {
